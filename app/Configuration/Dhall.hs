@@ -5,14 +5,15 @@
 
 module Configuration.Dhall (getConfigFromDhall) where
 
-import Common (Coord, Location)
-import Configuration.Common (Configuration (Configuration))
+import Common (Configuration, Location)
 import Control.Exception (SomeException, catch, try)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (ExceptT))
 import Dhall
+import Weather (Coord (Coord))
 
 -- instance Generic Location
+
 instance FromDhall Coord
 
 instance FromDhall Location

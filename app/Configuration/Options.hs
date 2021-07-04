@@ -1,20 +1,24 @@
 {-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Configuration.Options (getConfigFromOptions) where
 
-import Common (Coord (Coord))
-import Configuration.Common (Configuration (Configuration))
+import Common (Configuration (..))
 import Control.Exception
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (ExceptT))
+import Data.Text (Text)
 import Env.Generic (type (?) (Help))
 import Options.Applicative
 import Text.Read (readMaybe)
+import Weather (Coord (Coord))
 
 getConfigFromOptions :: (ExceptT String IO) Configuration
 getConfigFromOptions =
-  --  TODO вывод ошибки в Either
+  --  FIXME убрать вывод ошибок в консоль. Вместо этого выводить в Left
   ExceptT $ (Right <$> parse') `catch` (pure . Left . show @SomeException)
   where
     parse' =
@@ -50,7 +54,7 @@ getConfigFromOptions =
                 <> value Nothing
             )
           <*> option
-            (maybeReader (Just . (readMaybe @Coord)))
+            (maybeReader (Just . (readMaybe @Double)))
             ( long "coordTolerance"
                 <> short 'c'
                 <> metavar "COORD"
@@ -64,4 +68,19 @@ getConfigFromOptions =
                 <> metavar "UPDATE"
                 <> help "Update period"
                 <> value Nothing
+            )
+          <*> option
+            (auto)
+            ( long "apiKey"
+                <> short 'k'
+                <> metavar "API_KEY"
+                <> help "Api key"
+            )
+          <*> option
+            (auto)
+            ( long "apiRoot"
+                <> short 'r'
+                <> metavar "API_ROOT"
+                <> help "Api Root"
+                <> value ("api.openweathermap.org")
             )

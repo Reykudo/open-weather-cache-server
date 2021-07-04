@@ -5,16 +5,15 @@
 
 packages:
 - completed:
-    hackage: env-extra-1.0.0.0@sha256:2b5f58f5756dedf9956c2f5738920b082ab8e08a0b62b902b67f5134cecad00d,1558
+    hackage: persistent-spatial-0.1.0.0@sha256:e83f66122044bf123f2a096154b33395ae8b1c724d6387766a1669b3c6140da3,2213
     pantry-tree:
-      size: 330
-      sha256: b87d102a147f4c675b9b22ce62ab3bf0d79a030b416d4281319e8b91dabeb314
+      size: 434
+      sha256: 65fe4dab1c6403566d6e79db3def6b9fe6c6232c7c90e80492d4c6d584824ac3
   original:
-    hackage: env-extra-1.0.0.0@sha256:2b5f58f5756dedf9956c2f5738920b082ab8e08a0b62b902b67f5134cecad00d,1558
+    hackage: persistent-spatial-0.1.0.0@sha256:e83f66122044bf123f2a096154b33395ae8b1c724d6387766a1669b3c6140da3,2213
 snapshots:
 - completed:
-    size: 585393
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/18/0.yaml
-    sha256: c632012da648385b9fa3c29f4e0afd56ead299f1c5528ee789058be410e883c0
-  original:
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/18/0.yaml
+    size: 567677
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/17/14.yaml
+    sha256: 3740f22286bf5e6e3d82f88125e1c708b6e27847211f956b530aa5d83cf39383
+  original: lts-17.14

@@ -1,13 +1,13 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Configuration.Envs (getConfigFromEnvs) where
 
-import Common (Coord, Location)
-import Configuration.Common (Configuration (Configuration))
+import Common (Configuration (..), Location)
 import Control.Arrow (left)
 import Control.Exception (SomeException, catch, try)
 import Control.Monad.Trans.Class
@@ -19,7 +19,6 @@ import Text.Read (readEither, readMaybe)
 parseField :: (Read a) => String -> Either Error a
 parseField = left UnreadError . readEither
 
--- getConfigFromEnvs :: ExceptT String IO Configuration
 getConfigFromEnvs :: (ExceptT String IO) Configuration
 getConfigFromEnvs = ExceptT $ (Right <$> parse') `catch` (pure . Left . show @SomeException)
   where
@@ -30,3 +29,5 @@ getConfigFromEnvs = ExceptT $ (Right <$> parse') `catch` (pure . Left . show @So
           <*> var parseField "TIME" (help "Time tolerance" <> def Nothing)
           <*> var parseField "COORD" (help "Coordinates tolerance" <> def Nothing)
           <*> var parseField "UPDATE" (help "Update period" <> def Nothing)
+          <*> var parseField "API_KEY" (help "Update period")
+          <*> var parseField "API_ROOT" (help "Update period" <> def "api.openweathermap.org")

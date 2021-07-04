@@ -25,20 +25,41 @@ source-repository head
 
 library
   exposed-modules:
+      Api
       Common
       Lib
+      Utils
+      Weather
   other-modules:
       Paths_weather_cahche_server
   hs-source-dirs:
       src
   build-depends:
-      base >=4.7 && <5
+      aeson
+    , async
+    , base >=4.7 && <5
+    , bytestring
+    , containers
+    , hashmap
+    , http-client-tls
+    , http-types
+    , mtl
+    , persistent-spatial
+    , servant
+    , servant-client
+    , servant-openapi3
+    , servant-server
+    , servant-swagger-ui
+    , split
+    , text
+    , time
+    , transformers
+    , warp
   default-language: Haskell2010
 
 executable weather-cahche-server-exe
   main-is: Main.hs
   other-modules:
-      Configuration.Common
       Configuration.Configuration
       Configuration.Dhall
       Configuration.Envs

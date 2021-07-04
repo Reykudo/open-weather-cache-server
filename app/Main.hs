@@ -2,7 +2,10 @@ module Main where
 
 import Configuration.Configuration (getConfig)
 import Control.Monad (void)
-import Lib
+import Lib (startServer)
 
 main :: IO ()
-main = print =<< getConfig
+main = do
+  cfg <- getConfig
+  print cfg
+  startServer cfg

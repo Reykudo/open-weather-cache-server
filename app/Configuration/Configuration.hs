@@ -5,7 +5,6 @@
 module Configuration.Configuration (getConfig) where
 
 import Common
-import Configuration.Common (Configuration (Configuration))
 import Configuration.Dhall (getConfigFromDhall)
 import Configuration.Envs (getConfigFromEnvs)
 import Configuration.Options (getConfigFromOptions)
@@ -17,10 +16,8 @@ import Text.Read (readMaybe)
 
 getConfig :: IO Configuration
 getConfig = do
-  cfgFromDhal <- runExceptT $ asum [getConfigFromDhall, getConfigFromEnvs, getConfigFromOptions]
+  cfgFromDhal <- runExceptT $ asum [getConfigFromOptions, getConfigFromDhall, getConfigFromEnvs]
 
   case cfgFromDhal of
     Left s -> throwIO $ userError s
     Right r -> pure r
-
--- either (throwIO . userError . ( "AAAAA" <>)) pure cfgFromOptions

@@ -24,6 +24,27 @@ dependencies:
 
 library:
   source-dirs: src
+  dependencies:
+    - warp
+    - servant
+    - servant-server
+    - servant-client
+    - servant-openapi3
+    - servant-swagger-ui
+    - async
+    - time
+    - split
+    - text
+    - bytestring
+    - containers
+    - transformers
+    - mtl
+    - hashmap
+    - aeson
+
+    - http-client-tls
+    - http-types
+    - persistent-spatial
 
 executables:
   weather-cahche-server-exe:
