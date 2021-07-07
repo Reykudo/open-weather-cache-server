@@ -13,39 +13,29 @@ module Api where
 import Common (App, AppT (runAppT), AppTContext (cfg, store), Configuration (apiKey, apiRoot, coordTolerance, locations, timeTolerance, updatePeriod), Location (CityId, CityNames, Coords, ZipCode))
 import Control.Concurrent (modifyMVar, modifyMVar_, putMVar, readMVar, takeMVar, threadDelay, withMVar)
 import Control.Concurrent.Async (forConcurrently, forConcurrently_)
+import Control.Concurrent.STM (STM, atomically, modifyTVar, readTVar)
 import Control.Exception (throw, throwIO)
 import Control.Monad (forever, guard, void)
 import Control.Monad.Except (MonadError (throwError), MonadIO (liftIO), mapExceptT, runExceptT, withExceptT)
-import Control.Monad.Reader (MonadReader, ReaderT (runReaderT), ask, asks)
+import Control.Monad.Reader (MonadReader (ask), ReaderT (runReaderT), asks)
+import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Maybe (MaybeT (MaybeT, runMaybeT))
-import Data.Aeson
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BSL
-import Data.Foldable (Foldable (toList), find, foldl')
+import Data.Foldable (find)
 import Data.LatLong (LatLong (..), geoDistance)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
-import Data.Time
 import Data.Time.Clock.POSIX (getPOSIXTime)
 import Data.Typeable (Proxy (Proxy))
-import GHC.IO (unsafePerformIO)
-import Network.HTTP.Client.TLS (newTlsManager)
-import Network.HTTP.Types
+import Client.OpenWeather
 import Servant.API
-import Servant.Client
 import Servant.Server
 import Utils (hoistMaybe)
 import Weather
 
-type ExternalAPI =
-  ( ("weather" :> QueryParam' '[Required] "appid" Text :> QueryParams "q" Text :> Get '[JSON] Weather)
-      :<|> ("weather" :> QueryParam' '[Required] "appid" Text :> QueryParam' '[Required] "id" Int :> Get '[JSON] Weather)
-      :<|> ("weather" :> QueryParam' '[Required] "appid" Text :> QueryParam' '[Required] "lat" Double :> QueryParam' '[Required] "lon" Double :> Get '[JSON] Weather)
-      :<|> ("weather" :> QueryParam' '[Required] "appid" Text :> QueryParams "zip" Text :> Get '[JSON] Weather)
-  )
-
-type InternalAPI =
+type AppAPI =
   "weather"
     :> QueryParam "id" Int
     :> QueryParam "lat" Double
@@ -54,38 +44,8 @@ type InternalAPI =
     :> QueryParams "zip" Text
     :> Get '[JSON] Weather
 
-clientApi :: Proxy ExternalAPI
-clientApi = Proxy @ExternalAPI
-
-serverApi :: Proxy InternalAPI
-serverApi = Proxy @InternalAPI
-
-getWeatherByCityName :: Text -> [Text] -> ClientM Weather
-getWeatherByCityId :: Text -> Int -> ClientM Weather
-getWeatherByCoords :: Text -> Double -> Double -> ClientM Weather
-getWeatherByZipCode :: Text -> [Text] -> ClientM Weather
-getWeatherByCityName :<|> getWeatherByCityId :<|> getWeatherByCoords :<|> getWeatherByZipCode =
-  client
-    clientApi
-
-runClientMInApp :: Show a => ClientM a -> App a
-runClientMInApp clientM = do
-  manager <- newTlsManager
-  rootPath <- asks $ apiRoot . cfg
-  let clientEnv =
-        mkClientEnv
-          manager
-          ( BaseUrl
-              { baseUrlScheme = Http,
-                baseUrlHost = T.unpack rootPath,
-                baseUrlPort = 80,
-                baseUrlPath = "/data/2.5"
-              }
-          )
-  response <- liftIO $ runClientM clientM clientEnv
-
-  liftIO $ putStrLn "some request"
-  either (throwError . clientErrorToServerError) pure response
+serverApi :: Proxy AppAPI
+serverApi = Proxy @AppAPI
 
 getTimeChecker :: AppT IO (Int -> Bool)
 getTimeChecker = do
@@ -96,29 +56,28 @@ getTimeChecker = do
       currentTime <- round <$> liftIO getPOSIXTime
       pure (\cacheTime -> abs (cacheTime - currentTime) < diff')
 
-findInCacheBy :: (Weather -> Bool) -> App (Maybe Weather)
-findInCacheBy check = do
-  cacheMvar <- asks store
-  checkTime <- getTimeChecker
-  v <- liftIO $ readMVar cacheMvar
-  liftIO $ print $ length v
+findInCacheBy :: (Int -> Bool) -> (Weather -> Bool) -> ReaderT AppTContext STM (Maybe Weather)
+findInCacheBy checkTime check = do
+  cacheTvar <- asks store
+  cahce <- lift $ readTVar cacheTvar
   let finder weather@Weather {nameWeather, dtWeather} = check weather && checkTime dtWeather
-  liftIO $ withMVar cacheMvar (pure . find finder)
+  pure $ find finder cahce
 
-findInCacheByCoords :: Coord -> AppT IO (Maybe Weather)
-findInCacheByCoords targetCoord@Coord {lonCoord = targetLon, latCoord = targetLat} = do
+findInCacheByCoords :: (Int -> Bool) -> Coord -> ReaderT AppTContext STM (Maybe Weather)
+findInCacheByCoords checkTime targetCoord@Coord {lonCoord = targetLon, latCoord = targetLat} = do
   coordsTollerance <- asks $ coordTolerance . cfg
   let targetLatLong = LatLong targetLat targetLon
   checker <- case coordsTollerance of
     Nothing -> pure ((== targetCoord) . coordWeather)
     Just coordTolerance' -> pure (\Weather {coordWeather = Coord {lonCoord, latCoord}} -> geoDistance (LatLong latCoord lonCoord) targetLatLong <= coordTolerance')
 
-  findInCacheBy checker
+  findInCacheBy checkTime checker
 
-saveToCache :: Weather -> App ()
+-- saveToCache :: Weather -> App ()
+saveToCache :: Weather -> ReaderT AppTContext STM ()
 saveToCache weather = do
-  cacheMvar <- asks store
-  liftIO $ modifyMVar_ cacheMvar (pure . (weather :))
+  cacheTvar <- asks store
+  lift $ modifyTVar cacheTvar (weather :)
 
 withApiKey :: MonadReader AppTContext m => (Text -> b) -> m b
 withApiKey method = do
@@ -128,42 +87,56 @@ withApiKey method = do
 handleGetWeatherByCityName :: [Text] -> App Weather
 handleGetWeatherByCityName args = do
   let cityName = head args
-  valueFromCahce <- findInCacheBy ((== cityName) . nameWeather)
+  appContext <- ask
+  let withAppContext = flip runReaderT appContext
+  timeChecker <- getTimeChecker
+  valueFromCahce <- liftIO $ atomically $ withAppContext (findInCacheBy timeChecker ((== cityName) . nameWeather))
   case valueFromCahce of
     Nothing -> do
       method <- withApiKey getWeatherByCityName
       weather <- runClientMInApp $ method args
-      saveToCache weather
+      liftIO $ atomically $ withAppContext (saveToCache weather)
       pure weather
     Just w -> pure w
 
 handleGetWeatherByCityId :: Int -> AppT IO Weather
 handleGetWeatherByCityId cityId = do
-  valueFromCahce <- findInCacheBy ((== cityId) . weatherIDWeather)
+  timeChecker <- getTimeChecker
+
+  appContext <- ask
+  let withAppContext = flip runReaderT appContext
+  valueFromCahce <- liftIO $ atomically $ withAppContext (findInCacheBy timeChecker ((== cityId) . weatherIDWeather))
   case valueFromCahce of
     Nothing -> do
       method <- withApiKey getWeatherByCityId
       weather <- runClientMInApp $ method cityId
-      saveToCache weather
+      liftIO $ atomically $ withAppContext $ saveToCache weather
       pure weather
     Just w -> pure w
 
 handleGetWeatherByCoords :: Double -> Double -> AppT IO Weather
 handleGetWeatherByCoords lat lon = do
-  valueFromCahce <- findInCacheByCoords (Coord {latCoord = lat, lonCoord = lon})
+  timeChecker <- getTimeChecker
+  appContext <- ask
+  let withAppContext = flip runReaderT appContext
+
+  valueFromCahce <- liftIO $ atomically $ runReaderT (findInCacheByCoords timeChecker (Coord {latCoord = lat, lonCoord = lon})) appContext
   case valueFromCahce of
     Nothing -> do
       method <- withApiKey getWeatherByCoords
       weather <- runClientMInApp $ method lat lon
-      saveToCache weather
+      liftIO $ atomically $ withAppContext $ saveToCache weather
       pure weather
     Just w -> pure w
 
 handleGetWeatherByZipCode :: [Text] -> AppT IO Weather
 handleGetWeatherByZipCode args = do
+  appContext <- ask
+  let withAppContext = flip runReaderT appContext
+
   method <- withApiKey getWeatherByZipCode
   weather <- runClientMInApp $ method args
-  saveToCache weather
+  liftIO $ atomically $ withAppContext $ saveToCache weather
   pure weather
 
 handleGetWeather ::
@@ -179,14 +152,8 @@ handleGetWeather _ _ _ qParams@[_] _ = handleGetWeatherByCityName qParams
 handleGetWeather _ _ _ _ zipParams@[_] = handleGetWeatherByZipCode zipParams
 handleGetWeather _ _ _ _ _ = throwError err400 {errBody = "query params not valid"}
 
-handlers :: ServerT InternalAPI App
+handlers :: ServerT AppAPI App
 handlers = handleGetWeather
-
-clientErrorToServerError :: ClientError -> ServerError
-clientErrorToServerError
-  (FailureResponse _ Response {responseStatusCode = status, responseHeaders, responseBody}) =
-    ServerError {errHTTPCode = statusCode status, errBody = responseBody, errHeaders = toList responseHeaders, errReasonPhrase = "FailureResponse"}
-clientErrorToServerError _ = err400
 
 getByLocation :: Location -> AppT IO Weather
 getByLocation (CityId cityId) = do
@@ -222,7 +189,9 @@ startSheduler = void $
                     runAppT
                       ( do
                           weather <- getByLocation loc
-                          saveToCache weather
+                          appContext <- ask
+                          let withAppContext = flip runReaderT appContext
+                          liftIO $ atomically $ withAppContext $ saveToCache weather
                           pure weather
                       )
 

@@ -4,6 +4,7 @@
 module Common where
 
 import Control.Concurrent (MVar)
+import Control.Concurrent.STM (TVar)
 import Control.Monad.Except (ExceptT (ExceptT), MonadError)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Reader (MonadReader, ReaderT (ReaderT))
@@ -26,7 +27,7 @@ data Configuration = Configuration
 
 data Location = CityId Int | CityNames [Text] | Coords Coord | ZipCode [Text] deriving (Show, Read, Eq, Generic)
 
-data AppTContext = AppTContext {cfg :: Configuration, store :: MVar [Weather]}
+data AppTContext = AppTContext {cfg :: Configuration, store :: TVar [Weather]}
 
 newtype AppT m a = AppT
   { runAppT :: (ReaderT AppTContext (ExceptT ServerError m)) a

@@ -41,7 +41,7 @@ library:
     - mtl
     - hashmap
     - aeson
-
+    - stm
     - http-client-tls
     - http-types
     - persistent-spatial

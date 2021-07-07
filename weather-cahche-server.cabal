@@ -26,6 +26,7 @@ source-repository head
 library
   exposed-modules:
       Api
+      Client.OpenWeather
       Common
       Lib
       Utils
@@ -51,6 +52,7 @@ library
     , servant-server
     , servant-swagger-ui
     , split
+    , stm
     , text
     , time
     , transformers
