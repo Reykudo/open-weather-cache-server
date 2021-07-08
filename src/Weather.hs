@@ -8,7 +8,7 @@ import Data.Text (Text)
 import GHC.Generics (Generic)
 
 data Weather = Weather
-  { coordWeather :: Coord,
+  { coordWeather :: Coords,
     weatherWeather :: [WeatherElement],
     baseWeather :: Text,
     mainWeather :: Main,
@@ -29,7 +29,7 @@ newtype Clouds = Clouds
   }
   deriving (Show)
 
-data Coord = Coord
+data Coords = Coords
   { lonCoord :: Double,
     latCoord :: Double
   }
@@ -117,16 +117,16 @@ instance FromJSON Clouds where
     Clouds
       <$> v .: "all"
 
-instance ToJSON Coord where
-  toJSON (Coord lonCoord latCoord) =
+instance ToJSON Coords where
+  toJSON (Coords lonCoord latCoord) =
     object
       [ "lon" .= lonCoord,
         "lat" .= latCoord
       ]
 
-instance FromJSON Coord where
+instance FromJSON Coords where
   parseJSON (Object v) =
-    Coord
+    Coords
       <$> v .: "lon"
       <*> v .: "lat"
 

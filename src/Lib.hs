@@ -3,7 +3,6 @@
 
 module Lib (startServer) where
 
-import Api (initServer, startSheduler)
 import Common
 import Control.Concurrent (MVar, forkIO, newMVar)
 import Control.Concurrent.STM (atomically, newTVar, newTVarIO)
@@ -17,6 +16,7 @@ import Control.Monad.Trans.Reader (ReaderT (ReaderT))
 import qualified Data.Text as T
 import Network.Wai.Handler.Warp (run)
 import Servant.Client (ClientError)
+import Server.Api (initServer, startScheduler)
 
 startServer :: Configuration -> IO ()
 startServer cfg = do
@@ -24,5 +24,5 @@ startServer cfg = do
   let appPort = port cfg
   liftIO $ putStrLn $ "starting server at port " <> show appPort
   let appContext = AppTContext {cfg, store = store_}
-  forkIO $ void $ runExceptT $ runAppT startSheduler `runReaderT` appContext
+  forkIO $ void $ runExceptT $ runAppT startScheduler `runReaderT` appContext
   run appPort $ initServer appContext

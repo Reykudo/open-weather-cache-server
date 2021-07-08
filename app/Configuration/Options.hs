@@ -14,7 +14,7 @@ import Data.Text (Text)
 import Env.Generic (type (?) (Help))
 import Options.Applicative
 import Text.Read (readMaybe)
-import Weather (Coord (Coord))
+import Weather (Coords (Coords))
 
 getConfigFromOptions :: (ExceptT String IO) Configuration
 getConfigFromOptions =

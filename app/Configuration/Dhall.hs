@@ -10,11 +10,11 @@ import Control.Exception (SomeException, catch, try)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (ExceptT))
 import Dhall
-import Weather (Coord (Coord))
+import Weather (Coords (Coords))
 
 -- instance Generic Location
 
-instance FromDhall Coord
+instance FromDhall Coords
 
 instance FromDhall Location
 

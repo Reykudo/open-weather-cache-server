@@ -32,11 +32,12 @@ getWeatherByCityName :<|> getWeatherByCityId :<|> getWeatherByCoords :<|> getWea
     clientApi
 
 type OpenWeatherAPI =
-  ( ("weather" :> QueryParam' '[Required] "appid" Text :> QueryParams "q" Text :> Get '[JSON] Weather)
-      :<|> ("weather" :> QueryParam' '[Required] "appid" Text :> QueryParam' '[Required] "id" Int :> Get '[JSON] Weather)
-      :<|> ("weather" :> QueryParam' '[Required] "appid" Text :> QueryParam' '[Required] "lat" Double :> QueryParam' '[Required] "lon" Double :> Get '[JSON] Weather)
-      :<|> ("weather" :> QueryParam' '[Required] "appid" Text :> QueryParams "zip" Text :> Get '[JSON] Weather)
-  )
+  "/data/2.5"
+    :> ( ("weather" :> QueryParam' '[Required] "appid" Text :> QueryParams "q" Text :> Get '[JSON] Weather)
+           :<|> ("weather" :> QueryParam' '[Required] "appid" Text :> QueryParam' '[Required] "id" Int :> Get '[JSON] Weather)
+           :<|> ("weather" :> QueryParam' '[Required] "appid" Text :> QueryParam' '[Required] "lat" Double :> QueryParam' '[Required] "lon" Double :> Get '[JSON] Weather)
+           :<|> ("weather" :> QueryParam' '[Required] "appid" Text :> QueryParams "zip" Text :> Get '[JSON] Weather)
+       )
 
 clientApi :: Proxy OpenWeatherAPI
 clientApi = Proxy @OpenWeatherAPI
@@ -58,7 +59,7 @@ runClientMInApp clientM = do
               { baseUrlScheme = Http,
                 baseUrlHost = T.unpack rootPath,
                 baseUrlPort = 80,
-                baseUrlPath = "/data/2.5"
+                baseUrlPath = ""
               }
           )
   response <- liftIO $ runClientM clientM clientEnv

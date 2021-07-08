@@ -12,20 +12,20 @@ import Data.Text (Text)
 import GHC.Generics (Generic)
 import Servant (ServerError (ServerError))
 import Servant.Client (ClientError)
-import Weather (Coord (Coord), Weather)
+import Weather (Coords (Coords), Weather)
 
 data Configuration = Configuration
   { port :: Int,
     locations :: [Location],
     timeTolerance :: Maybe Int,
-    coordTolerance :: Maybe Double,
+    coordsTolerance :: Maybe Double,
     updatePeriod :: Maybe Int,
     apiKey :: Text,
     apiRoot :: Text
   }
   deriving (Show, Eq, Generic)
 
-data Location = CityId Int | CityNames [Text] | Coords Coord | ZipCode [Text] deriving (Show, Read, Eq, Generic)
+data Location = CityId Int | CityNames [Text] | ByCoords Coords | ZipCode [Text] deriving (Show, Read, Eq, Generic)
 
 data AppTContext = AppTContext {cfg :: Configuration, store :: TVar [Weather]}
 

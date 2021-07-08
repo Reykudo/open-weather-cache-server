@@ -8,9 +8,10 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
 
-module Api where
+module Server.Api where
 
-import Common (App, AppT (runAppT), AppTContext (cfg, store), Configuration (apiKey, apiRoot, coordTolerance, locations, timeTolerance, updatePeriod), Location (CityId, CityNames, Coords, ZipCode))
+import Client.OpenWeather
+import Common (App, AppT (runAppT), AppTContext (AppTContext, cfg, store), Configuration (Configuration, apiKey, apiRoot, coordsTolerance, locations, timeTolerance, updatePeriod), Location (ByCoords, CityId, CityNames, ZipCode))
 import Control.Concurrent (modifyMVar, modifyMVar_, putMVar, readMVar, takeMVar, threadDelay, withMVar)
 import Control.Concurrent.Async (forConcurrently, forConcurrently_)
 import Control.Concurrent.STM (STM, atomically, modifyTVar, readTVar)
@@ -29,7 +30,6 @@ import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.Time.Clock.POSIX (getPOSIXTime)
 import Data.Typeable (Proxy (Proxy))
-import Client.OpenWeather
 import Servant.API
 import Servant.Server
 import Utils (hoistMaybe)
@@ -56,22 +56,24 @@ getTimeChecker = do
       currentTime <- round <$> liftIO getPOSIXTime
       pure (\cacheTime -> abs (cacheTime - currentTime) < diff')
 
-findInCacheBy :: (Int -> Bool) -> (Weather -> Bool) -> ReaderT AppTContext STM (Maybe Weather)
-findInCacheBy checkTime check = do
-  cacheTvar <- asks store
-  cahce <- lift $ readTVar cacheTvar
-  let finder weather@Weather {nameWeather, dtWeather} = check weather && checkTime dtWeather
-  pure $ find finder cahce
+data FindContext = FindContext {appContext :: AppTContext, timeChecker :: Int -> Bool}
 
-findInCacheByCoords :: (Int -> Bool) -> Coord -> ReaderT AppTContext STM (Maybe Weather)
-findInCacheByCoords checkTime targetCoord@Coord {lonCoord = targetLon, latCoord = targetLat} = do
-  coordsTollerance <- asks $ coordTolerance . cfg
+findInCacheBy :: (Weather -> Bool) -> ReaderT FindContext STM (Maybe Weather)
+findInCacheBy check = do
+  FindContext {appContext = AppTContext {store}, timeChecker} <- ask
+  cache <- lift $ readTVar store
+  let finder weather@Weather {nameWeather, dtWeather} = check weather && timeChecker dtWeather
+  pure $ find finder cache
+
+findInCacheByCoords :: Coords -> ReaderT FindContext STM (Maybe Weather)
+findInCacheByCoords targetCoord@Coords {lonCoord = targetLon, latCoord = targetLat} = do
+  FindContext {appContext = AppTContext {cfg = Configuration {coordsTolerance}}} <- ask
   let targetLatLong = LatLong targetLat targetLon
-  checker <- case coordsTollerance of
+  checker <- case coordsTolerance of
     Nothing -> pure ((== targetCoord) . coordWeather)
-    Just coordTolerance' -> pure (\Weather {coordWeather = Coord {lonCoord, latCoord}} -> geoDistance (LatLong latCoord lonCoord) targetLatLong <= coordTolerance')
+    Just coordsTolerance' -> pure (\Weather {coordWeather = Coords {lonCoord, latCoord}} -> geoDistance (LatLong latCoord lonCoord) targetLatLong <= coordsTolerance')
 
-  findInCacheBy checkTime checker
+  findInCacheBy checker
 
 -- saveToCache :: Weather -> App ()
 saveToCache :: Weather -> ReaderT AppTContext STM ()
@@ -88,10 +90,12 @@ handleGetWeatherByCityName :: [Text] -> App Weather
 handleGetWeatherByCityName args = do
   let cityName = head args
   appContext <- ask
-  let withAppContext = flip runReaderT appContext
+
   timeChecker <- getTimeChecker
-  valueFromCahce <- liftIO $ atomically $ withAppContext (findInCacheBy timeChecker ((== cityName) . nameWeather))
-  case valueFromCahce of
+  let withFindContext = flip runReaderT $ FindContext appContext timeChecker
+  let withAppContext = flip runReaderT appContext
+  valueFromCache <- liftIO $ atomically $ withFindContext (findInCacheBy ((== cityName) . nameWeather))
+  case valueFromCache of
     Nothing -> do
       method <- withApiKey getWeatherByCityName
       weather <- runClientMInApp $ method args
@@ -102,11 +106,11 @@ handleGetWeatherByCityName args = do
 handleGetWeatherByCityId :: Int -> AppT IO Weather
 handleGetWeatherByCityId cityId = do
   timeChecker <- getTimeChecker
-
   appContext <- ask
+  let withFindContext = flip runReaderT $ FindContext appContext timeChecker
   let withAppContext = flip runReaderT appContext
-  valueFromCahce <- liftIO $ atomically $ withAppContext (findInCacheBy timeChecker ((== cityId) . weatherIDWeather))
-  case valueFromCahce of
+  valueFromCache <- liftIO $ atomically $ withFindContext (findInCacheBy ((== cityId) . weatherIDWeather))
+  case valueFromCache of
     Nothing -> do
       method <- withApiKey getWeatherByCityId
       weather <- runClientMInApp $ method cityId
@@ -118,10 +122,11 @@ handleGetWeatherByCoords :: Double -> Double -> AppT IO Weather
 handleGetWeatherByCoords lat lon = do
   timeChecker <- getTimeChecker
   appContext <- ask
+  let withFindContext = flip runReaderT $ FindContext appContext timeChecker
   let withAppContext = flip runReaderT appContext
 
-  valueFromCahce <- liftIO $ atomically $ runReaderT (findInCacheByCoords timeChecker (Coord {latCoord = lat, lonCoord = lon})) appContext
-  case valueFromCahce of
+  valueFromCache <- liftIO $ atomically $ withFindContext (findInCacheByCoords (Coords {latCoord = lat, lonCoord = lon}))
+  case valueFromCache of
     Nothing -> do
       method <- withApiKey getWeatherByCoords
       weather <- runClientMInApp $ method lat lon
@@ -162,15 +167,15 @@ getByLocation (CityId cityId) = do
 getByLocation (CityNames cityNames) = do
   method <- withApiKey getWeatherByCityName
   runClientMInApp $ method cityNames
-getByLocation (Coords Coord {latCoord, lonCoord}) = do
+getByLocation (ByCoords Coords {latCoord, lonCoord}) = do
   method <- withApiKey getWeatherByCoords
   runClientMInApp $ method latCoord lonCoord
 getByLocation (ZipCode zipCode) = do
   method <- withApiKey getWeatherByZipCode
   runClientMInApp $ method zipCode
 
-startSheduler :: App ()
-startSheduler = void $
+startScheduler :: App ()
+startScheduler = void $
   runMaybeT $ do
     appContext <- ask
     let config = cfg appContext
@@ -190,13 +195,13 @@ startSheduler = void $
                       ( do
                           weather <- getByLocation loc
                           appContext <- ask
-                          let withAppContext = flip runReaderT appContext
-                          liftIO $ atomically $ withAppContext $ saveToCache weather
+                          let withFindContext = flip runReaderT appContext
+                          liftIO $ atomically $ withFindContext $ saveToCache weather
                           pure weather
                       )
 
               case res of
-                Left e -> putStrLn $ "An error has occurance " <> show e
+                Left e -> putStrLn $ "An error has occurrence " <> show e
                 Right _ -> pure ()
           )
 

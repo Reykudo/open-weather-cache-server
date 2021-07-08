@@ -1,6 +1,6 @@
-name: weather-cahche-server
+name: weather-cache-server
 version: 0.1.0.0
-github: "githubuser/weather-cahche-server"
+github: "githubuser/weather-cache-server"
 license: BSD3
 author: "Author name here"
 maintainer: "example@example.com"
@@ -55,7 +55,7 @@ executables:
       - -rtsopts
       - -with-rtsopts=-N
     dependencies:
-      - weather-cahche-server
+      - weather-cache-server
       - optparse-applicative
 
       - envparse
@@ -73,4 +73,4 @@ tests:
       - -rtsopts
       - -with-rtsopts=-N
     dependencies:
-      - weather-cahche-server
+      - weather-cache-server
